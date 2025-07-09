@@ -64,6 +64,7 @@
 
 sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
                            years, fill_fnc = fill_across, fleets,
+                           strict_copy = FALSE, # AJJ: added to allow straight copy of WAA file
                            cv_wtatage = NULL) {
   ## fill_type: specify type of fill, fill zeroes with first row? annual interpolation?
   ## Age Interpolation?
@@ -71,6 +72,8 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
   ## EM. So quit early and in ss3sim_base do NOT turn wtatage on using
   ## the maturity function
   if (is.null(cv_wtatage)) stop("specify cv_wtatage")
+
+  wta_file_in_name <- wta_file_in # AJJ: Added in to allow easy direct file transfer
 
   cat("cv_wtatage is", cv_wtatage, "\n")
   if (is.null(fleets)) {
@@ -95,7 +98,7 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
 
   ## Remove double spaces, which Stock Synthesis writes in the 7th column
   wta_file_in <- gsub("  ", replacement = " ", x = wta_file_in)
-  xx <- grep(x = wta_file_in, "#yr seas gender growpattern birthseas fleet")
+  xx <- grep(x = wta_file_in, "#Yr Seas Sex Bio_Pattern BirthSeas Fleet") # AJJ: Supply correct default names
   if (length(xx) != 1) stop("Failed to read in wtatage file")
   header <- unlist(strsplit(wta_file_in[xx], " "))
   header[-(1:6)] <- paste("age", header[-(1:6)], sep = "")
@@ -106,7 +109,9 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
   wtatage <- as.data.frame(matrix(as.numeric(unlist(strsplit(wtatage, split = " "))),
     nrow = length(wtatage), byrow = TRUE
   ))
+  wtatage <- wtatage[,-ncol(wtatage)] # AJJ: Removed end column of NAs
   names(wtatage) <- gsub("#", replacement = "", x = header)
+  names(wtatage)[1:6] <- c("yr", "seas", "gender", "growpattern", "birthseas", "fleet") # AJJ: convert default names to expected names
   wtatage$yr <- abs(wtatage$yr)
   if (2 %in% unique(wtatage$fleet) == FALSE) {
     ones <- wtatage[wtatage$fleet == 1, ]
@@ -115,7 +120,7 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
     wtatage <- rbind(wtatage, twos)
   }
 
-  age0 <- wtatage[!duplicated(wtatage$fleet), c("fleet", "age0")]
+  # age0 <- wtatage[!duplicated(wtatage$fleet), c("fleet", "age0")] # AJJ: Removed as unnecessary - current sampling already generates age-0 wtatage
   wtatage.new.list <- list(1, 2) # temp storage for the new rows
 
   #----------------------------------------------------------------------------
@@ -127,16 +132,16 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
   unsampled.wtatage <- list(1, 2, 3)
   unsampled.wtatage[[1]] <- wtatage[which(wtatage$fleet == -2), ]
   unsampled.wtatage[[2]] <- wtatage[which(wtatage$fleet == -1), ]
-  unsampled.wtatage[[3]] <- wtatage[which(wtatage$fleet == 0), ]
+  unsampled.wtatage[[3]] <- wtatage[which(wtatage$fleet == 0 & wtatage$yr != 9999), ] # AJJ: prevent termination line for fleet 0 from ruining flow
 
-  # Change all years to negatives so it will work with ss
-  unsampled.wtatage <- lapply(
-    unsampled.wtatage,
-    function(x) {
-      x$yr <- -x$yr
-      return(x)
-    }
-  )
+  # Change all years to negatives so it will work with ss # AJJ: Remove this correction as unnecessary
+  # unsampled.wtatage <- lapply(
+  #   unsampled.wtatage,
+  #   function(x) {
+  #     x$yr <- -x$yr
+  #     return(x)
+  #   }
+  # )
 
   # Start Sampling other fleets
   # fl <- 1
@@ -157,7 +162,7 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
         #----------------------------------------------------------------------------------------------------
         # Step 1, draw from true age distributions
         agecomp.temp <- agecomp[agecomp$year == yr & agecomp$fleet == fl, ]
-        # ACH: I'm going with the motto of think about it. Why enter a year for wtatage when you do not have data?
+        # ACH: Im going with the motto of think about it. Why enter a year for wtatage when you do not have data?
         if (nrow(agecomp.temp) == 0) {
           stop("No age comp observations for year", yr, "and fleet", fl, "\n")
         }
@@ -187,8 +192,8 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
         CV.growth <- cv_wtatage # User-Specified
 
         # Define growth parameters
-        Wtlen1 <- ctl[ctl$Label == "Wtlen_1_Fem", "INIT"]
-        Wtlen2 <- ctl[ctl$Label == "Wtlen_2_Fem", "INIT"]
+        Wtlen1 <- ctl[ctl$Label == "Wtlen_1_Fem_GP_1", "INIT"] # AJJ: Specify correct parameter name
+        Wtlen2 <- ctl[ctl$Label == "Wtlen_2_Fem_GP_1", "INIT"] # AJJ: Specify correct parameter name
         sds <- mla.means * CV.growth
 
         # Sample: I used a for loop to keep things understandable for me. could use apply also
@@ -211,10 +216,10 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
         samp.wtatage <- sapply(weights.list, mean)
 
         # concatenate everything
-        prefix <- wtatage[wtatage$yr == yr & wtatage$fleet == 1, 1:5] # I used fleet=1 because wtatage_new only outputs fleet 1
+        prefix <- wtatage[wtatage$yr == yr & wtatage$fleet == fl, 1:5] # AJJ: Corrected to use correct fleet
         tmp.fl <- fl
         wtatage.new.means <- c(
-          unlist(prefix), tmp.fl, age0[age0$fleet == 1, "age0"],
+          unlist(prefix), tmp.fl, # age0[age0$fleet == 1, "age0"], # AJJ: Removed separate fixing of age-0 wtatage b/c its already sampled/calculated
           samp.wtatage
         )
         # store to wtatage.new.list
@@ -233,7 +238,6 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
   ##     wtatage.new.list[[2]] <- wtatage.new.list[[1]]
   ##     wtatage.new.list[[2]]$fleet <- 2
   ## }
-
   wtatage.complete <- lapply(wtatage.new.list, fill_fnc, minYear = dat_list$styr, maxYear = dat_list$endyr)
 
   # wtatage.new.list[[1]]
@@ -286,35 +290,32 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
   # Nlines <- Nlines + sum(unlist(lapply(wtatage.complete,nrow)))
 
   ## write wtatage.ss file
-  if (is.null(outfile)) cat(dat_list$Nages, "# Maximum Age\n", file = outfile, append = TRUE)
+  if (!is.null(outfile)) cat(dat_list$Nages, "# Maximum Age\n", file = outfile, append = TRUE) # Fixed typo to '!is.null'
 
   # loop through the various matrices and build up wtatage.final while doing it
   wtatage.final <- list()
 
-  if (is.null(outfile)) cat("#fleet -2, fecundity\n", file = outfile, append = TRUE)
+  if (!is.null(outfile)) cat("#fleet -2, fecundity\n", file = outfile, append = TRUE) # Fixed typo to '!is.null'
   wtatage.final[[1]] <- unsampled.wtatage[[1]]
 
   # wtatage.final[[1]] <- fecund
-  # wtatage.final[[1]]$yr <- -1 * wtatage.final[[1]]$yr
   if (!is.null(outfile)) utils::write.table(unsampled.wtatage[[1]], file = outfile, append = TRUE, row.names = FALSE, col.names = FALSE)
 
   if (!is.null(outfile)) cat("\n#fleet -1\n", file = outfile, append = TRUE)
   # wtatage.final[[2]] <- fltNeg1
   wtatage.final[[2]] <- unsampled.wtatage[[2]]
-  # wtatage.final[[2]]$yr <- -1 * wtatage.final[[2]]$yr
   if (!is.null(outfile)) utils::write.table(unsampled.wtatage[[2]], file = outfile, append = TRUE, row.names = FALSE, col.names = FALSE)
 
   if (!is.null(outfile)) cat("\n#fleet 0\n", file = outfile, append = TRUE)
   # wtatage.final[[3]] <- fltZero
   wtatage.final[[3]] <- unsampled.wtatage[[3]]
-  # wtatage.final[[3]]$yr <- -1 * wtatage.final[[3]]$yr
   if (!is.null(outfile)) utils::write.table(unsampled.wtatage[[3]], file = outfile, append = TRUE, row.names = FALSE, col.names = FALSE)
 
   # loop through fleets
   for (i in fleets) {
     if (!is.null(outfile)) cat("\n#fleet", i, "\n", file = outfile, append = TRUE)
     wtatage.final[[i + 3]] <- wtatage.complete[[i]]
-    wtatage.final[[i + 3]]$yr <- -1 * wtatage.final[[i + 3]]$yr
+    # wtatage.final[[i + 3]]$yr <- -1 * wtatage.final[[i + 3]]$yr # AJJ: Remove negative years as unnecessary
     if (!is.null(outfile)) utils::write.table(wtatage.final[[i + 3]], file = outfile, append = TRUE, row.names = FALSE, col.names = FALSE)
   }
   endline <- data.frame(t(c(-9999, 1, 1, 1, 1, rep(0, dat_list$Nages))))
@@ -323,6 +324,10 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
       file = outfile, append = TRUE,
       row.names = FALSE, col.names = FALSE
     )
+  }
+
+  if(strict_copy == TRUE){
+    file.copy(wta_file_in_name, outfile, overwrite = TRUE) # AJJ: Testing direct file transfer to avoid other issues
   }
 
   return(invisible(wtatage.final))

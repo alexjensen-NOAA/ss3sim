@@ -112,11 +112,11 @@ fill_across <- function(mat, minYear, maxYear) {
     temp.df[1, "yr"] <- 1
   }
 
-  # check to make sure that last year is filled
-  if (is.na(temp.df[100, "age0"])) {
-    temp.df[100, -1] <- temp.df[99, -1]
-    temp.df[100, "yr"] <- 100
-  }
+  # check to make sure that last year is filled # AJJ: removed to avoid creating lots of NA rows
+  # if (is.na(temp.df[100, "age0"])) {
+  #   temp.df[100, -1] <- temp.df[99, -1]
+  #   temp.df[100, "yr"] <- 100
+  # }
 
   return(temp.df)
 }
