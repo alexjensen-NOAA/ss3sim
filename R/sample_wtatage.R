@@ -71,6 +71,9 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
   ## A value of NULL for fleets signifies to turn this data off in the
   ## EM. So quit early and in ss3sim_base do NOT turn wtatage on using
   ## the maturity function
+  cv_wtatage <- cv_wtatage[[1]] # AJJ: Added in b/c recent ss3sim converts df inputs into separate list objects for each fleet
+  strict_copy <- strict_copy[[1]] # AJJ: Added in b/c recent ss3sim converts df inputs into separate list objects for each fleet
+
   if (is.null(cv_wtatage)) stop("specify cv_wtatage")
 
   wta_file_in_name <- wta_file_in # AJJ: Added in to allow easy direct file transfer
