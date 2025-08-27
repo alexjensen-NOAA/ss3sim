@@ -64,7 +64,9 @@
 
 sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
                            years, fill_fnc = fill_across, fleets,
+                           Nsamp, # AJJ: added to use user-provided Nsamps for age distributions used in WAA estimation
                            strict_copy = FALSE, # AJJ: added to allow straight copy of WAA file
+                           early_timing = NULL, # AJJ: added to allow specification a survey fleet WAA to be set to popwt_beg
                            cv_wtatage = NULL) {
   ## fill_type: specify type of fill, fill zeroes with first row? annual interpolation?
   ## Age Interpolation?
@@ -73,8 +75,10 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
   ## the maturity function
   cv_wtatage <- cv_wtatage[[1]] # AJJ: Added in b/c recent ss3sim converts df inputs into separate list objects for each fleet
   strict_copy <- strict_copy[[1]] # AJJ: Added in b/c recent ss3sim converts df inputs into separate list objects for each fleet
+  early_timing <- early_timing[[1]]
 
   if (is.null(cv_wtatage)) stop("specify cv_wtatage")
+  if (is.null(Nsamp)) stop("specify Nsamp")  # AJJ: consider adding a flag is users don't provide Nsamp
 
   wta_file_in_name <- wta_file_in # AJJ: Added in to allow easy direct file transfer
 
@@ -89,7 +93,7 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
 
   agecomp <- dat_list$agecomp[dat_list$agecomp$Lbin_lo == -1, ]
 
-  cat("sample size is ", unique(agecomp$Nsamp), "\n")
+  #cat("sample size is ", unique(agecomp$Nsamp), "\n") # AJJ: commented out as no longer relevant
   agebin_vector <- dat_list$agebin_vector
 
   mlacomp <- dat_list$MeanSize_at_Age_obs
@@ -172,7 +176,8 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
 
         ## Get the true age distributions
         age.means <- as.numeric(agecomp.temp[-(1:9)])
-        age.Nsamp <- as.numeric(agecomp.temp$Nsamp)
+        age.Nsamp <- as.numeric(Nsamp[[fl]]) # AJJ: replaced age.Nsamp to use user-specified value
+        #age.Nsamp <- as.numeric(agecomp.temp$Nsamp)
 
         #----------------------------------------------------------------------------------------------------
         # Step 2, determine # of fish in sample per bin
@@ -210,6 +215,10 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
         for (ii in seq_len(nrow(age.samples)))
         {
           lengths.list[[ii]] <- suppressWarnings(stats::rnorm(n = age.samples[ii], mean = mla.means[ii], sd = sds[ii]))
+          while(any(is.na(lengths.list[[ii]]))){ # AJJ: remove instances with negative simulated lengths through resampling but warn users
+            lengths.list[[ii]] <- suppressWarnings(stats::rnorm(n = age.samples[ii], mean = mla.means[ii], sd = sds[ii]))
+            print("Negative lengths generated during WAA sampling. Consider decreasing the CV.")
+          }
 
           # Step 4, convert lengths to weights with no error
           weights.list[[ii]] <- Wtlen1 * lengths.list[[ii]]^Wtlen2
@@ -329,8 +338,22 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
     )
   }
 
+  # AJJ: added different functionality for sampling WAA - direct copy w/o MLA/Nsamp/etc.
   if(strict_copy == TRUE){
-    file.copy(wta_file_in_name, outfile, overwrite = TRUE) # AJJ: Testing direct file transfer to avoid other issues
+    file.copy(wta_file_in_name, outfile, overwrite = TRUE) # AJJ: Apply strict copy of wtatage.ss_new in OM to wtatage.ss in EM
+    if(is.numeric(early_timing)){ # if a fleet number is specified here, provide popwt_beg WAA values to that fleet (instead of popwt_mid)
+      waa_temp <- r4ss::SS_readwtatage(outfile, verbose = FALSE)
+      waa_popwtbeg <- waa_temp |>
+        dplyr::filter(fleet == 0) |>
+        dplyr::mutate(fleet = early_timing)
+      waa_temp_new <- waa_temp |>
+        dplyr::filter(fleet != early_timing) |>
+        rbind(waa_popwtbeg)
+      r4ss::SS_writewtatage(waa_temp_new,
+                            dir = dirname(outfile),
+                            file = "wtatage.ss",
+                            overwrite = TRUE)
+    }
   }
 
   return(invisible(wtatage.final))
