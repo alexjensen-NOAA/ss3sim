@@ -179,6 +179,9 @@ ss3sim_base <- function(iterations,
                         scenarios,
                         f_params,
                         index_params,
+                        apply_cust_surv_acomp_sel = FALSE, # AJJ: default is FALSE
+                        cust_surv_acomp_sel = NULL, # AJJ: Data frame of ages (age) and custom selectivity (sel)
+                        cust_surv_acomp_flt = NULL, # AJJ: Scalar of fleet number for survey to be modified
                         discard_params = NULL,
                         lcomp_params = NULL,
                         agecomp_params = NULL,
@@ -542,6 +545,43 @@ ss3sim_base <- function(iterations,
 
     # Sample from the OM -----------------------------------------------------
     dat_list <- expdata
+
+    # AJJ: Apply custom survey selectivity if apply_cust_surv_acomp_sel == TRUE
+      # Consider adding error message if apply_cust_surv_acomp_sel == TRUE but
+        # cust_surv_acomp_flt or cust_surv_acomp_sel are NULL
+    if(apply_cust_surv_acomp_sel==TRUE){
+      om_out <- r4ss::SS_output(
+        dir = file.path(sc, i, "om"),
+        verbose = FALSE,
+        printstats = FALSE)
+      new_calc_surv_acomp <- om_out$natage |>
+        dplyr::rename(year = Yr) |>
+        dplyr::filter(`Beg/Mid` == "B") |> # AJJ: default is to apply "B" NAA
+        tidyr::pivot_longer(cols = -c(1:12),
+                            names_to = "age",
+                            values_to = "abundance") |>
+        dplyr::mutate(fleet = cust_surv_acomp_flt) |>
+        dplyr::mutate(age = as.numeric(age)) |>
+        dplyr::left_join(cust_surv_acomp_sel) |> # Consider adding error message if cust_surv_acomp_sel dimensions are incorrect
+        dplyr::mutate(surv_abund = abundance * sel) |>
+        dplyr::group_by(year) |>
+        dplyr::mutate(year_surv_abund = sum(surv_abund)) |>
+        dplyr::ungroup() |>
+        dplyr::mutate(surv_comp = surv_abund / year_surv_abund) |>
+        dplyr::select(year, fleet, age, surv_comp)
+      agecomp_new <- dat_list$agecomp |>
+        dplyr::filter(fleet == cust_surv_acomp_flt) |>
+        dplyr::select(year:Nsamp) |>
+        dplyr::left_join(new_calc_surv_acomp) |>
+        dplyr::mutate(age_comp = Nsamp * surv_comp,
+                      age = paste0("a", age)) |>
+        dplyr::select(-surv_comp) |>
+        tidyr::pivot_wider(names_from = age, values_from = age_comp)
+      agecomp_final <- dat_list$agecomp |>
+        dplyr::filter(fleet != cust_surv_acomp_flt) |>
+        rbind(agecomp_new)
+      dat_list$agecomp <- agecomp_final
+    }
 
     ## Sample catches
     dat_list <- sample_catch(dat_list = dat_list)
