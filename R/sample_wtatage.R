@@ -352,7 +352,8 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
       r4ss::SS_writewtatage(waa_temp_new,
                             dir = dirname(outfile),
                             file = "wtatage.ss",
-                            overwrite = TRUE)
+                            overwrite = TRUE,
+                            verbose = FALSE)
     }
   }
 
