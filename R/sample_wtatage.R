@@ -338,6 +338,7 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
       if (!is.null(outfile)) cat("\n#fleet", i, "\n", file = outfile, append = TRUE)
       if(i == fleet_from_to[2]){
         wtatage.final[[i + 3]] <- wtatage.complete[[fleet_from_to[1]]]
+        wtatage.final[[i + 3]][,6] <- fleet_from_to[2]
       } else {
         wtatage.final[[i + 3]] <- wtatage.complete[[i]]
       }
