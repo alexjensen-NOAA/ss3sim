@@ -67,6 +67,8 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
                            Nsamp, # AJJ: added to use user-provided Nsamps for age distributions used in WAA estimation
                            strict_copy = FALSE, # AJJ: added to allow straight copy of WAA file
                            early_timing = NULL, # AJJ: added to allow specification a survey fleet WAA to be set to popwt_beg
+                           fleet_copy = FALSE, # AJJ: added to allow copy of 1 sampled fleet WAA to another
+                           fleet_from_to = NULL, # AJJ: added to specify which fleets are copied and replaced using 2-length numeric vector (1 copied, 1 replaced)
                            cv_wtatage = NULL) {
   ## fill_type: specify type of fill, fill zeroes with first row? annual interpolation?
   ## Age Interpolation?
@@ -326,10 +328,21 @@ sample_wtatage <- function(wta_file_in, outfile, dat_list, ctl_file_in,
 
   # loop through fleets
   for (i in fleets) {
-    if (!is.null(outfile)) cat("\n#fleet", i, "\n", file = outfile, append = TRUE)
-    wtatage.final[[i + 3]] <- wtatage.complete[[i]]
-    # wtatage.final[[i + 3]]$yr <- -1 * wtatage.final[[i + 3]]$yr # AJJ: Remove negative years as unnecessary
-    if (!is.null(outfile)) utils::write.table(wtatage.final[[i + 3]], file = outfile, append = TRUE, row.names = FALSE, col.names = FALSE)
+    if(!fleet_copy){ # AJJ: added switch to allow normal processing if there's no need to copy+paste fleet WAA
+      if (!is.null(outfile)) cat("\n#fleet", i, "\n", file = outfile, append = TRUE)
+      wtatage.final[[i + 3]] <- wtatage.complete[[i]]
+      # wtatage.final[[i + 3]]$yr <- -1 * wtatage.final[[i + 3]]$yr # AJJ: Remove negative years as unnecessary
+      if (!is.null(outfile)) utils::write.table(wtatage.final[[i + 3]], file = outfile, append = TRUE, row.names = FALSE, col.names = FALSE)
+    }
+    if(fleet_copy){ # AJJ: added switch and revised processing to copy+paste fleet WAA
+      if (!is.null(outfile)) cat("\n#fleet", i, "\n", file = outfile, append = TRUE)
+      if(i == fleet_from_to[2]){
+        wtatage.final[[i + 3]] <- wtatage.complete[[fleet_from_to[1]]]
+      } else {
+        wtatage.final[[i + 3]] <- wtatage.complete[[i]]
+      }
+      if (!is.null(outfile)) utils::write.table(wtatage.final[[i + 3]], file = outfile, append = TRUE, row.names = FALSE, col.names = FALSE)
+    }
   }
   endline <- data.frame(t(c(-9999, 1, 1, 1, 1, rep(0, dat_list$Nages))))
   if (!is.null(outfile)) {
