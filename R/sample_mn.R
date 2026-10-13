@@ -6,7 +6,7 @@
 #' @return A data frame with one row because right now the input
 #' data should only be a single row of data.
 sample_mn <- function(data, n) {
-  set.seed(10) # for given n and row of true age proportions, will generate same results
+  # set.seed(10) # for given n and row of true age proportions, will generate same results - needed for split fleet validation
   xxx <- stats::rmultinom(1, size = n, prob = prop.table(data))
   return(t(xxx))
 }
