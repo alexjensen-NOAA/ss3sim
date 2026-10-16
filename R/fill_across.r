@@ -32,7 +32,15 @@ fill_across <- function(mat, minYear, maxYear) {
 
     for (jj in na.index)
     {
-      if (is.na(temp[jj])) {
+      if (is.na(temp[jj] & jj == 7)){ # AJ custom addition for missing age-0 WAA
+        # Find the end of the NA string
+        find.end <- jj
+        while (is.na(temp[find.end])) {
+          if (find.end == ncol(temp)) break
+          find.end <- find.end + 1
+        }
+        temp[jj] <- temp[find.end] # set equal to next available age
+      } else if (is.na(temp[jj])) {
         start.index <- jj - 1
         start <- temp[start.index]
 
